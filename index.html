@@ -1,0 +1,738 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Vididrop</title>
+<link rel="icon" href="/icone.ico" type="image/x-icon">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  :root {
+    --bg: #06060c; --surface: #0f0f1a;
+    --card: rgba(255,255,255,0.035); --border: rgba(255,255,255,0.07);
+    --accent: #b8ff5c; --accent-dim: rgba(184,255,92,0.12); --accent-glow: rgba(184,255,92,0.25);
+    --text: #eeeef5; --muted: #6b6b8a;
+    --error: #ff5f6d; --success: #56d886; --info: #7eb8ff;
+    --radius: 16px; --font-ui: 'Syne', sans-serif; --font-mono: 'JetBrains Mono', monospace;
+  }
+  html, body { min-height: 100vh; background: var(--bg); color: var(--text); font-family: var(--font-ui); overflow-x: hidden; }
+  body::before {
+    content: ''; position: fixed; inset: 0;
+    background: radial-gradient(ellipse 80% 60% at 50% -10%, rgba(184,255,92,0.06) 0%, transparent 70%),
+                radial-gradient(ellipse 40% 40% at 80% 80%, rgba(120,80,255,0.06) 0%, transparent 60%);
+    pointer-events: none; z-index: 0;
+  }
+  body::after {
+    content: ''; position: fixed; inset: 0;
+    background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)' opacity='0.03'/%3E%3C/svg%3E");
+    pointer-events: none; z-index: 0; opacity: .5;
+  }
+
+  /* ── Layout ── */
+  .page { position: relative; z-index: 1; min-height: 100vh; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 40px 20px; }
+
+  /* ── Top bar ── */
+  .topbar { position: fixed; top: 0; left: 0; right: 0; z-index: 100; display: flex; align-items: center; justify-content: space-between; padding: 12px 24px; background: rgba(6,6,12,0.8); backdrop-filter: blur(12px); border-bottom: 1px solid var(--border); }
+  .topbar-logo { font-size: 18px; font-weight: 800; letter-spacing: -0.5px; }
+  .topbar-logo span { color: var(--accent); }
+  .topbar-right { display: flex; align-items: center; gap: 10px; }
+
+  /* ── Auth buttons ── */
+  .btn-ghost { padding: 7px 16px; background: none; border: 1px solid var(--border); border-radius: 10px; color: var(--muted); font-family: var(--font-ui); font-size: 13px; font-weight: 600; cursor: pointer; transition: all .15s; }
+  .btn-ghost:hover { border-color: rgba(255,255,255,0.2); color: var(--text); }
+  .btn-accent { padding: 7px 16px; background: var(--accent); border: none; border-radius: 10px; color: #0a0a0a; font-family: var(--font-ui); font-size: 13px; font-weight: 700; cursor: pointer; transition: all .15s; }
+  .btn-accent:hover { box-shadow: 0 0 16px var(--accent-glow); }
+
+  .user-chip { display: flex; align-items: center; gap: 8px; padding: 6px 12px; background: var(--accent-dim); border: 1px solid rgba(184,255,92,0.2); border-radius: 100px; font-family: var(--font-mono); font-size: 12px; color: var(--accent); }
+  .user-chip .dot { width: 6px; height: 6px; background: var(--accent); border-radius: 50%; animation: pulse-dot 2s infinite; }
+  @keyframes pulse-dot { 0%,100%{opacity:1} 50%{opacity:.3} }
+
+  /* ── Modal overlay ── */
+  .modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.7); backdrop-filter: blur(4px); z-index: 200; display: flex; align-items: center; justify-content: center; padding: 20px; opacity: 0; pointer-events: none; transition: opacity .2s; }
+  .modal-overlay.open { opacity: 1; pointer-events: all; }
+
+  .modal { background: #0e0e1a; border: 1px solid var(--border); border-radius: 24px; padding: 36px; width: 100%; max-width: 420px; box-shadow: 0 40px 80px rgba(0,0,0,0.6); transform: translateY(16px); transition: transform .2s; }
+  .modal-overlay.open .modal { transform: translateY(0); }
+
+  .modal-title { font-size: 24px; font-weight: 800; margin-bottom: 6px; }
+  .modal-sub { font-size: 13px; color: var(--muted); font-family: var(--font-mono); margin-bottom: 28px; }
+
+  /* ── Form fields ── */
+  .field { margin-bottom: 16px; }
+  .field label { display: block; font-size: 11px; font-weight: 700; letter-spacing: 1.5px; color: var(--muted); text-transform: uppercase; font-family: var(--font-mono); margin-bottom: 7px; }
+  .field input {
+    width: 100%; padding: 14px 16px; background: rgba(255,255,255,0.04);
+    border: 1px solid var(--border); border-radius: 12px; color: var(--text);
+    font-family: var(--font-mono); font-size: 14px; outline: none; transition: border-color .2s, box-shadow .2s;
+  }
+  .field input:focus { border-color: rgba(184,255,92,0.4); box-shadow: 0 0 0 3px rgba(184,255,92,0.08); }
+  .field input::placeholder { color: var(--muted); }
+
+  .form-btn { width: 100%; padding: 15px; background: var(--accent); border: none; border-radius: 12px; color: #0a0a0a; font-family: var(--font-ui); font-size: 15px; font-weight: 800; cursor: pointer; transition: all .2s; margin-top: 8px; }
+  .form-btn:hover { box-shadow: 0 8px 24px var(--accent-glow); transform: translateY(-1px); }
+  .form-btn:disabled { opacity: .5; cursor: default; transform: none; box-shadow: none; }
+
+  .modal-switch { text-align: center; margin-top: 18px; font-size: 13px; color: var(--muted); font-family: var(--font-mono); }
+  .modal-switch a { color: var(--accent); cursor: pointer; text-decoration: none; }
+  .modal-switch a:hover { text-decoration: underline; }
+
+  .modal-close { position: absolute; top: 16px; right: 20px; background: none; border: none; color: var(--muted); font-size: 20px; cursor: pointer; transition: color .15s; }
+  .modal-close:hover { color: var(--text); }
+  .modal { position: relative; }
+
+  .form-msg { padding: 10px 14px; border-radius: 8px; font-size: 13px; font-family: var(--font-mono); margin-bottom: 14px; display: none; }
+  .form-msg.error   { background: rgba(255,95,109,.1); color: var(--error); border: 1px solid rgba(255,95,109,.2); display: block; }
+  .form-msg.success { background: rgba(86,216,134,.1); color: var(--success); border: 1px solid rgba(86,216,134,.2); display: block; }
+
+  /* ── Header ── */
+  .header { text-align: center; margin-bottom: 48px; margin-top: 60px; animation: fadeDown .6s ease both; }
+  .logo { display: inline-flex; align-items: center; gap: 12px; margin-bottom: 16px; }
+  .logo-icon { width: 48px; height: 48px; background: var(--accent); border-radius: 14px; display: flex; align-items: center; justify-content: center; font-size: 22px; box-shadow: 0 0 30px var(--accent-glow); animation: pulse-glow 3s ease-in-out infinite; }
+  @keyframes pulse-glow { 0%,100%{box-shadow:0 0 30px var(--accent-glow)} 50%{box-shadow:0 0 50px rgba(184,255,92,0.4)} }
+  .logo-text { font-size: 32px; font-weight: 800; letter-spacing: -1px; }
+  .logo-text span { color: var(--accent); }
+  .subtitle { font-size: 14px; color: var(--muted); font-family: var(--font-mono); }
+
+  /* ── Main card ── */
+  .card { width: 100%; max-width: 560px; background: var(--card); border: 1px solid var(--border); border-radius: 24px; padding: 36px; backdrop-filter: blur(20px); animation: fadeUp .7s ease both; box-shadow: 0 40px 80px rgba(0,0,0,0.4), 0 0 0 1px rgba(255,255,255,0.04) inset; }
+
+  /* ── Input ── */
+  .input-section { margin-bottom: 28px; }
+  .input-label { font-size: 11px; font-weight: 700; letter-spacing: 2px; color: var(--muted); text-transform: uppercase; font-family: var(--font-mono); margin-bottom: 10px; }
+  .input-wrap { display: flex; align-items: center; background: rgba(255,255,255,0.04); border: 1px solid var(--border); border-radius: var(--radius); transition: border-color .2s, box-shadow .2s; }
+  .input-wrap:focus-within { border-color: rgba(184,255,92,0.4); box-shadow: 0 0 0 3px rgba(184,255,92,0.08); }
+  .url-icon { padding: 0 14px 0 18px; color: var(--muted); font-size: 16px; flex-shrink: 0; pointer-events: none; }
+  #urlInput { flex: 1; background: none; border: none; outline: none; color: var(--text); font-family: var(--font-mono); font-size: 13.5px; padding: 16px 0; caret-color: var(--accent); }
+  #urlInput::placeholder { color: var(--muted); }
+  .paste-btn { margin: 6px 8px; padding: 8px 16px; background: var(--accent-dim); border: 1px solid rgba(184,255,92,0.2); border-radius: 10px; color: var(--accent); font-family: var(--font-mono); font-size: 12px; font-weight: 700; cursor: pointer; transition: all .15s; flex-shrink: 0; }
+  .paste-btn:hover { background: rgba(184,255,92,0.2); }
+  .site-badge { display: flex; align-items: center; gap: 8px; margin-top: 10px; padding: 8px 14px; background: rgba(255,255,255,0.03); border: 1px solid var(--border); border-radius: 100px; font-size: 12px; font-weight: 600; width: fit-content; opacity: 0; transform: translateY(-4px); transition: opacity .3s, transform .3s; font-family: var(--font-mono); }
+
+  /* ── Quality ── */
+  .quality-section { margin-bottom: 28px; }
+  #qualityGrid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; opacity: 0; transform: translateY(8px); pointer-events: none; transition: opacity .3s, transform .3s; }
+  .q-btn { padding: 10px 8px; background: rgba(255,255,255,0.04); border: 1px solid var(--border); border-radius: 12px; color: var(--muted); font-family: var(--font-ui); font-size: 13px; font-weight: 600; cursor: pointer; text-align: center; transition: all .15s; }
+  .q-btn:hover { background: rgba(255,255,255,0.07); color: var(--text); }
+  .q-btn.active { background: var(--accent-dim); border-color: rgba(184,255,92,0.4); color: var(--accent); }
+  .q-btn .badge { display: inline-block; background: rgba(184,255,92,0.15); color: var(--accent); font-size: 9px; font-weight: 800; font-family: var(--font-mono); padding: 1px 5px; border-radius: 4px; margin-left: 4px; vertical-align: middle; }
+  .q-btn.active .badge { background: rgba(184,255,92,0.3); }
+
+  /* ── Download btn ── */
+  #downloadBtn { width: 100%; padding: 18px; background: var(--accent); border: none; border-radius: var(--radius); color: #0a0a0a; font-family: var(--font-ui); font-size: 16px; font-weight: 800; cursor: pointer; transition: all .2s; position: relative; overflow: hidden; box-shadow: 0 8px 24px rgba(184,255,92,0.2); }
+  #downloadBtn:hover:not(:disabled) { transform: translateY(-2px); box-shadow: 0 12px 32px rgba(184,255,92,0.35); }
+  #downloadBtn:disabled { opacity: .4; cursor: default; transform: none; box-shadow: none; }
+  #downloadBtn[data-status="fetching"]::after, #downloadBtn[data-status="downloading"]::after { content: ''; position: absolute; top: 0; left: -100%; width: 100%; height: 100%; background: linear-gradient(90deg, transparent, rgba(255,255,255,0.2), transparent); animation: shimmer 1.5s infinite; }
+  @keyframes shimmer { to { left: 100%; } }
+  #downloadBtn[data-status="done"]  { background: var(--success); }
+  #downloadBtn[data-status="error"] { background: var(--error); }
+
+  .status-msg { margin-top: 14px; padding: 12px 16px; border-radius: 10px; font-size: 13px; font-family: var(--font-mono); opacity: 0; transition: opacity .3s; }
+  .status-msg.error   { background: rgba(255,95,109,.1); color: var(--error); border: 1px solid rgba(255,95,109,.2); }
+  .status-msg.success { background: rgba(86,216,134,.1); color: var(--success); border: 1px solid rgba(86,216,134,.2); }
+  .status-msg.info    { background: rgba(126,184,255,.1); color: var(--info); border: 1px solid rgba(126,184,255,.2); }
+
+
+  /* ── Progress bar ── */
+  .progress-wrap {
+    margin-top: 14px;
+    opacity: 0;
+    transform: translateY(4px);
+    transition: opacity .3s, transform .3s;
+    pointer-events: none;
+  }
+  .progress-wrap.visible { opacity: 1; transform: translateY(0); }
+  .progress-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
+  .progress-label { font-size: 12px; font-family: var(--font-mono); color: var(--muted); }
+  .progress-pct { font-size: 12px; font-family: var(--font-mono); color: var(--accent); font-weight: 700; }
+  .progress-track {
+    width: 100%; height: 6px;
+    background: rgba(255,255,255,0.06);
+    border-radius: 100px; overflow: hidden;
+  }
+  .progress-bar {
+    height: 100%; width: 0%;
+    background: linear-gradient(90deg, var(--accent), #78ff00);
+    border-radius: 100px;
+    transition: width .4s ease;
+    box-shadow: 0 0 10px rgba(184,255,92,0.4);
+  }
+  .progress-bar.indeterminate {
+    width: 40% !important;
+    animation: slide-indeterminate 1.4s ease-in-out infinite;
+  }
+  @keyframes slide-indeterminate {
+    0%   { transform: translateX(-120%); }
+    100% { transform: translateX(350%); }
+  }
+  .progress-steps { display: flex; gap: 6px; margin-top: 10px; }
+  .progress-step { flex: 1; height: 3px; background: rgba(255,255,255,0.06); border-radius: 100px; transition: background .3s; }
+  .progress-step.done { background: var(--accent); }
+  .progress-step.active { background: rgba(184,255,92,0.4); animation: pulse-step .8s ease-in-out infinite alternate; }
+  @keyframes pulse-step { from{opacity:.4} to{opacity:1} }
+
+  .divider { height: 1px; background: var(--border); margin: 28px 0; }
+  #resetBtn { width: 100%; margin-top: 12px; padding: 10px; background: none; border: 1px solid var(--border); border-radius: 10px; color: var(--muted); font-family: var(--font-ui); font-size: 13px; font-weight: 600; cursor: pointer; transition: all .15s; }
+  #resetBtn:hover { border-color: rgba(255,255,255,0.15); color: var(--text); }
+
+  /* ── History panel ── */
+  .history-card { width: 100%; max-width: 560px; margin-top: 20px; background: var(--card); border: 1px solid var(--border); border-radius: 20px; padding: 24px; backdrop-filter: blur(20px); animation: fadeUp .8s ease both .1s; display: none; }
+  .history-card.visible { display: block; }
+  .history-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 16px; }
+  .history-title { font-size: 13px; font-weight: 700; letter-spacing: 1.5px; color: var(--muted); text-transform: uppercase; font-family: var(--font-mono); }
+  .history-clear { padding: 5px 12px; background: none; border: 1px solid rgba(255,95,109,0.2); border-radius: 8px; color: var(--error); font-family: var(--font-mono); font-size: 11px; cursor: pointer; transition: all .15s; }
+  .history-clear:hover { background: rgba(255,95,109,0.1); }
+  .history-list { display: flex; flex-direction: column; gap: 8px; max-height: 240px; overflow-y: auto; }
+  .history-item { padding: 10px 14px; background: rgba(255,255,255,0.03); border: 1px solid var(--border); border-radius: 10px; font-family: var(--font-mono); font-size: 12px; display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+  .history-url { color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1; }
+  .history-quality { color: var(--accent); font-size: 10px; font-weight: 700; padding: 2px 6px; background: var(--accent-dim); border-radius: 4px; flex-shrink: 0; }
+  .history-date { color: var(--muted); font-size: 10px; flex-shrink: 0; }
+  .history-empty { color: var(--muted); font-family: var(--font-mono); font-size: 13px; text-align: center; padding: 16px; }
+
+  /* ── Sites ── */
+  .sites-row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-top: 28px; justify-content: center; animation: fadeUp .9s ease both .2s; }
+  .sites-label { font-size: 11px; font-family: var(--font-mono); color: var(--muted); text-transform: uppercase; letter-spacing: 1.5px; width: 100%; text-align: center; margin-bottom: 4px; }
+  .site-pill { padding: 5px 12px; background: rgba(255,255,255,0.04); border: 1px solid var(--border); border-radius: 100px; font-size: 12px; font-weight: 600; color: var(--muted); display: flex; align-items: center; gap: 5px; }
+
+  /* ── Footer ── */
+  .footer { margin-top: 36px; text-align: center; font-size: 11px; color: var(--muted); font-family: var(--font-mono); line-height: 1.8; }
+  .footer a { color: var(--accent); text-decoration: none; }
+
+  @keyframes fadeDown { from{opacity:0;transform:translateY(-16px)} to{opacity:1;transform:translateY(0)} }
+  @keyframes fadeUp   { from{opacity:0;transform:translateY(16px)}  to{opacity:1;transform:translateY(0)} }
+
+  @media(max-width:480px) { .card{padding:24px 20px} #qualityGrid{grid-template-columns:repeat(3,1fr)} .logo-text{font-size:26px} .topbar{padding:10px 16px} }
+</style>
+</head>
+<body>
+
+<!-- ── Top bar ── -->
+<div class="topbar">
+  <div class="topbar-logo">Vidid<span>rop</span></div>
+  <div class="topbar-right" id="topbarRight">
+    <button class="btn-ghost" onclick="openModal('login')">Connexion</button>
+    <button class="btn-accent" onclick="openModal('register')">S'inscrire</button>
+  </div>
+</div>
+
+<!-- ── Modal Login ── -->
+<div class="modal-overlay" id="loginModal">
+  <div class="modal">
+    <button class="modal-close" onclick="closeModal('login')">✕</button>
+    <div class="modal-title">Connexion</div>
+    <div class="modal-sub">// Accède à ton historique</div>
+    <div class="form-msg" id="loginMsg"></div>
+    <div class="field"><label>Email</label><input id="loginEmail" type="email" placeholder="toi@exemple.com" /></div>
+    <div class="field"><label>Mot de passe</label><input id="loginPass" type="password" placeholder="••••••••" /></div>
+    <button class="form-btn" id="loginBtn" onclick="doLogin()">Se connecter</button>
+    <div class="modal-switch">Pas encore de compte ? <a onclick="switchModal('login','register')">S'inscrire</a></div>
+  </div>
+</div>
+
+<!-- ── Modal Register ── -->
+<div class="modal-overlay" id="registerModal">
+  <div class="modal">
+    <button class="modal-close" onclick="closeModal('register')">✕</button>
+    <div class="modal-title">Créer un compte</div>
+    <div class="modal-sub">// Gratuit, sans carte bancaire</div>
+    <div class="form-msg" id="registerMsg"></div>
+    <div class="field"><label>Nom d'utilisateur</label><input id="regUsername" type="text" placeholder="monpseudo" /></div>
+    <div class="field"><label>Email</label><input id="regEmail" type="email" placeholder="toi@exemple.com" /></div>
+    <div class="field"><label>Mot de passe</label><input id="regPass" type="password" placeholder="Min. 6 caractères" /></div>
+    <button class="form-btn" id="registerBtn" onclick="doRegister()">Créer mon compte</button>
+    <div class="modal-switch">Déjà un compte ? <a onclick="switchModal('register','login')">Se connecter</a></div>
+  </div>
+</div>
+
+<!-- ── Page ── -->
+<div class="page">
+
+  <div class="header">
+    <div class="logo">
+      <div class="logo-icon">⬇</div>
+      <div class="logo-text">Vidid<span>rop</span></div>
+    </div>
+    <div class="subtitle">// Téléchargeur universel de vidéos</div>
+  </div>
+
+  <div class="card">
+    <div class="input-section">
+      <div class="input-label">// Lien vidéo</div>
+      <div class="input-wrap">
+        <div class="url-icon">◈</div>
+        <input id="urlInput" type="url" placeholder="Colle ton lien ici..." autocomplete="off" spellcheck="false" />
+        <button class="paste-btn" id="pasteBtn">COLLER</button>
+      </div>
+      <div id="siteBadge" class="site-badge"></div>
+    </div>
+
+    <div class="quality-section">
+      <div class="input-label">// Qualité</div>
+      <div id="qualityGrid">
+        <button class="q-btn active" data-quality="max">Meilleure <span class="badge">MAX</span></button>
+        <button class="q-btn" data-quality="2160">4K <span class="badge">4K</span></button>
+        <button class="q-btn" data-quality="1440">1440p <span class="badge">2K</span></button>
+        <button class="q-btn" data-quality="1080">1080p <span class="badge">FHD</span></button>
+        <button class="q-btn" data-quality="720">720p <span class="badge">HD</span></button>
+        <button class="q-btn" data-quality="480">480p</button>
+        <button class="q-btn" data-quality="360">360p</button>
+        <button class="q-btn" data-quality="audio">Audio <span class="badge">MP3</span></button>
+      </div>
+    </div>
+
+    <div class="divider"></div>
+
+    <button id="downloadBtn" disabled data-status="idle">Colle un lien d'abord</button>
+    <!-- Progress bar -->
+    <div class="progress-wrap" id="progressWrap">
+      <div class="progress-header">
+        <span class="progress-label" id="progressLabel">Connexion au serveur...</span>
+        <span class="progress-pct" id="progressPct">0%</span>
+      </div>
+      <div class="progress-track">
+        <div class="progress-bar" id="progressBar"></div>
+      </div>
+      <div class="progress-steps">
+        <div class="progress-step" id="step1"></div>
+        <div class="progress-step" id="step2"></div>
+        <div class="progress-step" id="step3"></div>
+        <div class="progress-step" id="step4"></div>
+      </div>
+    </div>
+
+    <div id="statusMsg" class="status-msg"></div>
+    <button id="resetBtn">↺ Réinitialiser</button>
+  </div>
+
+  <!-- History (visible si connecté) -->
+  <div class="history-card" id="historyCard">
+    <div class="history-header">
+      <div class="history-title">// Historique</div>
+      <button class="history-clear" onclick="clearHistory()">Effacer</button>
+    </div>
+    <div class="history-list" id="historyList">
+      <div class="history-empty">Aucun téléchargement pour l'instant.</div>
+    </div>
+  </div>
+
+  <div class="sites-row">
+    <div class="sites-label">Sites supportés</div>
+    <div class="site-pill"><span style="color:#ff0000">▶</span> YouTube</div>
+    <div class="site-pill"><span style="color:#69c9d0">♪</span> TikTok</div>
+    <div class="site-pill"><span style="color:#e1306c">◉</span> Instagram</div>
+    <div class="site-pill"><span style="color:#1d9bf0">✕</span> X / Twitter</div>
+    <div class="site-pill"><span style="color:#ff4500">◆</span> Reddit</div>
+    <div class="site-pill"><span style="color:#9147ff">◈</span> Twitch</div>
+    <div class="site-pill"><span style="color:#1ab7ea">○</span> Vimeo</div>
+    <div class="site-pill"><span style="color:#888">+</span> 100+</div>
+  </div>
+
+  <div class="footer">
+    Propulsé par <a href="https://cobalt.tools" target="_blank">cobalt.tools</a> — open source &amp; sans pub<br>
+    Usage personnel uniquement · Respecte les droits d'auteur
+  </div>
+</div>
+
+<script>
+// ═══════════════════════════════════════════════════════
+//  Vididrop — Frontend avec Auth + API Backend
+// ═══════════════════════════════════════════════════════
+
+const API = ""; // Vide = même domaine. En dev: "http://localhost:3000"
+
+// ── Auth state ────────────────────────────────────────
+let authToken = localStorage.getItem("vididrop_token") || null;
+let authUser  = JSON.parse(localStorage.getItem("vididrop_user") || "null");
+
+function saveAuth(token, user) {
+  authToken = token; authUser = user;
+  localStorage.setItem("vididrop_token", token);
+  localStorage.setItem("vididrop_user", JSON.stringify(user));
+}
+
+function clearAuth() {
+  authToken = null; authUser = null;
+  localStorage.removeItem("vididrop_token");
+  localStorage.removeItem("vididrop_user");
+}
+
+// ── Modal helpers ─────────────────────────────────────
+function openModal(name) {
+  document.getElementById(name + "Modal").classList.add("open");
+  clearFormMsg(name);
+}
+
+function closeModal(name) {
+  document.getElementById(name + "Modal").classList.remove("open");
+}
+
+function switchModal(from, to) {
+  closeModal(from); openModal(to);
+}
+
+function setFormMsg(name, msg, type) {
+  const el = document.getElementById(name + "Msg");
+  el.textContent = msg; el.className = "form-msg " + type;
+}
+
+function clearFormMsg(name) {
+  const el = document.getElementById(name + "Msg");
+  el.textContent = ""; el.className = "form-msg";
+}
+
+// ── Register ──────────────────────────────────────────
+async function doRegister() {
+  const btn      = document.getElementById("registerBtn");
+  const username = document.getElementById("regUsername").value.trim();
+  const email    = document.getElementById("regEmail").value.trim();
+  const password = document.getElementById("regPass").value;
+
+  if (!username || !email || !password) return setFormMsg("register", "Tous les champs sont requis.", "error");
+
+  btn.disabled = true; btn.textContent = "Création...";
+
+  try {
+    const res  = await fetch(API + "/api/auth/register", {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ username, email, password }),
+    });
+    const data = await res.json();
+
+    if (!res.ok) throw new Error(data.error || "Erreur lors de l'inscription.");
+
+    saveAuth(data.token, data.user);
+    closeModal("register");
+    renderTopbar();
+    loadHistory();
+    setFormMsg("register", "", "");
+  } catch(e) {
+    setFormMsg("register", e.message, "error");
+  } finally {
+    btn.disabled = false; btn.textContent = "Créer mon compte";
+  }
+}
+
+// ── Login ─────────────────────────────────────────────
+async function doLogin() {
+  const btn      = document.getElementById("loginBtn");
+  const email    = document.getElementById("loginEmail").value.trim();
+  const password = document.getElementById("loginPass").value;
+
+  if (!email || !password) return setFormMsg("login", "Email et mot de passe requis.", "error");
+
+  btn.disabled = true; btn.textContent = "Connexion...";
+
+  try {
+    const res  = await fetch(API + "/api/auth/login", {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ email, password }),
+    });
+    const data = await res.json();
+
+    if (!res.ok) throw new Error(data.error || "Erreur de connexion.");
+
+    saveAuth(data.token, data.user);
+    closeModal("login");
+    renderTopbar();
+    loadHistory();
+  } catch(e) {
+    setFormMsg("login", e.message, "error");
+  } finally {
+    btn.disabled = false; btn.textContent = "Se connecter";
+  }
+}
+
+// ── Logout ────────────────────────────────────────────
+function doLogout() {
+  clearAuth();
+  renderTopbar();
+  document.getElementById("historyCard").classList.remove("visible");
+}
+
+// ── Topbar render ─────────────────────────────────────
+function renderTopbar() {
+  const right = document.getElementById("topbarRight");
+  if (authUser) {
+    right.innerHTML = `
+      <div class="user-chip"><div class="dot"></div><span>${authUser.username}</span></div>
+      <button class="btn-ghost" onclick="doLogout()">Déconnexion</button>
+    `;
+  } else {
+    right.innerHTML = `
+      <button class="btn-ghost" onclick="openModal('login')">Connexion</button>
+      <button class="btn-accent" onclick="openModal('register')">S'inscrire</button>
+    `;
+  }
+}
+
+// ── History ───────────────────────────────────────────
+async function loadHistory() {
+  if (!authToken) return;
+
+  const card = document.getElementById("historyCard");
+  card.classList.add("visible");
+
+  try {
+    const res  = await fetch(API + "/api/history", {
+      headers: { "Authorization": "Bearer " + authToken },
+    });
+    const data = await res.json();
+    renderHistory(data);
+  } catch { /* silently fail */ }
+}
+
+function renderHistory(items) {
+  const list = document.getElementById("historyList");
+  if (!items || !items.length) {
+    list.innerHTML = '<div class="history-empty">Aucun téléchargement pour l\'instant.</div>';
+    return;
+  }
+  list.innerHTML = items.map(item => {
+    const d   = new Date(item.date || item.created_at);
+    const ago = timeAgo(d);
+    let host = item.url;
+    try { host = new URL(item.url).hostname.replace("www.", ""); } catch{}
+    return `
+      <div class="history-item">
+        <div class="history-url" title="${item.url}">${host}</div>
+        <div class="history-quality">${item.quality.toUpperCase()}</div>
+        <div class="history-date">${ago}</div>
+      </div>
+    `;
+  }).join("");
+}
+
+async function clearHistory() {
+  if (!authToken) return;
+  await fetch(API + "/api/history", {
+    method: "DELETE", headers: { "Authorization": "Bearer " + authToken },
+  });
+  renderHistory([]);
+}
+
+function timeAgo(date) {
+  const s = Math.floor((Date.now() - date) / 1000);
+  if (s < 60)    return "à l'instant";
+  if (s < 3600)  return Math.floor(s/60)  + " min";
+  if (s < 86400) return Math.floor(s/3600) + "h";
+  return Math.floor(s/86400) + "j";
+}
+
+// ── Site detection ────────────────────────────────────
+const SITE_DETECTORS = [
+  [/youtube\.com|youtu\.be/, { name:"YouTube",    icon:"▶", color:"#ff0000" }],
+  [/twitter\.com|x\.com/,   { name:"X / Twitter",icon:"✕", color:"#1d9bf0" }],
+  [/instagram\.com/,        { name:"Instagram",  icon:"◉", color:"#e1306c" }],
+  [/tiktok\.com/,           { name:"TikTok",     icon:"♪", color:"#69c9d0" }],
+  [/reddit\.com/,           { name:"Reddit",     icon:"◆", color:"#ff4500" }],
+  [/twitch\.tv/,            { name:"Twitch",     icon:"◈", color:"#9147ff" }],
+  [/vimeo\.com/,            { name:"Vimeo",      icon:"○", color:"#1ab7ea" }],
+  [/soundcloud\.com/,       { name:"SoundCloud", icon:"♬", color:"#ff5500" }],
+];
+
+function isValidUrl(raw) {
+  try { const u = new URL(raw); return ["http:","https:"].includes(u.protocol); } catch { return false; }
+}
+
+function detectSite(url) {
+  for (const [p, s] of SITE_DETECTORS) if (p.test(url)) return s;
+  return { name:"Site", icon:"◇", color:"#aaa" };
+}
+
+function inferFilename(url, quality) {
+  try { const h = new URL(url).hostname.replace("www.",""); return `${h}_${Date.now()}.${quality==="audio"?"mp3":"mp4"}`; }
+  catch { return quality==="audio"?"audio.mp3":"video.mp4"; }
+}
+
+// ── App state ─────────────────────────────────────────
+const state = { status:"idle", url:"", quality:"max", site:null, error:null };
+function setState(p) { Object.assign(state, p); render(); }
+
+// ── Download — appel backend (CORS réglé !) ───────────
+// ── Progress helpers ─────────────────────────────────
+let progressTimer = null;
+let activeSSE = null;
+
+function showProgress(label, pct, stepIndex, indeterminate) {
+  const wrap  = document.getElementById("progressWrap");
+  const bar   = document.getElementById("progressBar");
+  const lbl   = document.getElementById("progressLabel");
+  const pctEl = document.getElementById("progressPct");
+  wrap.classList.add("visible");
+  lbl.textContent   = label;
+  pctEl.textContent = pct + "%";
+  if (indeterminate) {
+    bar.classList.add("indeterminate");
+  } else {
+    bar.classList.remove("indeterminate");
+    bar.style.width = pct + "%";
+  }
+  for (let i = 1; i <= 4; i++) {
+    const s = document.getElementById("step" + i);
+    s.className = "progress-step" + (i < stepIndex ? " done" : i === stepIndex ? " active" : "");
+  }
+}
+
+function hideProgress() {
+  document.getElementById("progressWrap").classList.remove("visible");
+  if (progressTimer) { clearInterval(progressTimer); progressTimer = null; }
+  if (activeSSE)     { activeSSE.close(); activeSSE = null; }
+  document.getElementById("progressBar").style.width = "0%";
+  document.getElementById("progressBar").classList.remove("indeterminate");
+  document.getElementById("progressPct").textContent = "0%";
+  for (let i = 1; i <= 4; i++) document.getElementById("step"+i).className = "progress-step";
+}
+
+// ── Notre propre moteur yt-dlp via SSE ────────────────
+async function performDownload() {
+  const { url, quality } = state;
+  if (!isValidUrl(url)) { setState({ status:"error", error:"URL invalide." }); return; }
+
+  setState({ status:"fetching", error:null });
+  hideProgress();
+  showProgress("Connexion au serveur...", 2, 1, true);
+
+  // Utilise Server-Sent Events pour la progression en temps réel
+  const sseUrl = API + "/api/progress?" + new URLSearchParams({ url, quality });
+
+  try {
+    await new Promise((resolve, reject) => {
+      const sse = new EventSource(sseUrl);
+      activeSSE = sse;
+
+      sse.addEventListener("status", e => {
+        const d = JSON.parse(e.data);
+        const step = d.percent < 30 ? 1 : d.percent < 60 ? 2 : d.percent < 90 ? 3 : 4;
+        showProgress(d.message, d.percent, step, d.percent < 5);
+        if (d.percent >= 5) setState({ status:"downloading" });
+      });
+
+      sse.addEventListener("progress", e => {
+        const d = JSON.parse(e.data);
+        const step = d.percent < 30 ? 1 : d.percent < 60 ? 2 : d.percent < 90 ? 3 : 4;
+        const label = d.speed
+          ? `Téléchargement... ${d.speed}${d.eta ? " · ETA " + d.eta : ""}`
+          : "Téléchargement en cours...";
+        showProgress(label, d.percent, step, false);
+      });
+
+      sse.addEventListener("done", e => {
+        const d = JSON.parse(e.data);
+        showProgress("✓ Téléchargement terminé !", 100, 4, false);
+        sse.close(); activeSSE = null;
+
+        // Télécharger le fichier
+        const a = document.createElement("a");
+        a.href = API + d.downloadUrl;
+        a.download = d.filename || "vididrop_video";
+        document.body.appendChild(a); a.click(); document.body.removeChild(a);
+
+        setState({ status:"done" });
+        setTimeout(() => hideProgress(), 3000);
+        if (authToken) loadHistory();
+        resolve();
+      });
+
+      sse.addEventListener("error", e => {
+        sse.close(); activeSSE = null;
+        let msg = "Erreur lors du téléchargement.";
+        try { msg = JSON.parse(e.data).message; } catch {}
+        reject(new Error(msg));
+      });
+
+      // Fallback si SSE échoue (navigateur ou réseau)
+      sse.onerror = (err) => {
+        if (sse.readyState === EventSource.CLOSED) {
+          reject(new Error("Connexion perdue avec le serveur."));
+        }
+      };
+    });
+  } catch(e) {
+    hideProgress();
+    setState({ status:"error", error: e.message });
+  }
+}
+
+// ── Render ────────────────────────────────────────────
+function render() {
+  const badge = document.getElementById("siteBadge");
+  if (state.site && state.status !== "idle") {
+    badge.innerHTML = `<span style="color:${state.site.color}">${state.site.icon}</span><span>${state.site.name}</span>`;
+    badge.style.opacity = "1"; badge.style.transform = "translateY(0)";
+  } else { badge.style.opacity = "0"; badge.style.transform = "translateY(-4px)"; }
+
+  const grid = document.getElementById("qualityGrid");
+  const v = state.status !== "idle";
+  grid.style.opacity = v?"1":"0"; grid.style.pointerEvents = v?"auto":"none"; grid.style.transform = v?"translateY(0)":"translateY(8px)";
+  document.querySelectorAll("[data-quality]").forEach(b => b.classList.toggle("active", b.dataset.quality === state.quality));
+
+  const btn = document.getElementById("downloadBtn");
+  const labels = { idle:"Colle un lien d'abord", detecting:"Détection...", ready:"⬇  Télécharger", fetching:"Connexion...", downloading:"Téléchargement...", done:"✓  Lancé !", error:"↺  Réessayer" };
+  btn.textContent = labels[state.status] ?? "Télécharger";
+  btn.disabled = ["idle","detecting","fetching","downloading"].includes(state.status);
+  btn.dataset.status = state.status;
+
+  const msg = document.getElementById("statusMsg");
+  const s = state.status;
+  if (s==="error" && state.error) { msg.textContent="⚠  "+state.error; msg.className="status-msg error"; msg.style.opacity="1"; }
+  else if (s==="done") { msg.textContent="✓  Fichier en cours de téléchargement."; msg.className="status-msg success"; msg.style.opacity="1"; }
+  else if (s==="fetching"||s==="downloading") { msg.textContent="◌  Traitement en cours..."; msg.className="status-msg info"; msg.style.opacity="1"; }
+  else { msg.style.opacity="0"; }
+}
+
+// ── Events ────────────────────────────────────────────
+const urlInput = document.getElementById("urlInput");
+
+urlInput.addEventListener("input", () => {
+  const val = urlInput.value.trim();
+  setState({ url:val, site: isValidUrl(val)?detectSite(val):null, error:null, status: val?(isValidUrl(val)?"ready":"detecting"):"idle" });
+});
+
+urlInput.addEventListener("paste", () => setTimeout(() => {
+  const val = urlInput.value.trim();
+  setState({ url:val, site: isValidUrl(val)?detectSite(val):null, error:null, status: isValidUrl(val)?"ready":"detecting" });
+}, 30));
+
+document.getElementById("pasteBtn").addEventListener("click", async () => {
+  try {
+    const text = await navigator.clipboard.readText();
+    urlInput.value = text;
+    const val = text.trim();
+    setState({ url:val, site: isValidUrl(val)?detectSite(val):null, error:null, status: isValidUrl(val)?"ready":"detecting" });
+  } catch { urlInput.focus(); }
+});
+
+document.querySelectorAll("[data-quality]").forEach(b => b.addEventListener("click", () => setState({ quality: b.dataset.quality })));
+
+document.getElementById("downloadBtn").addEventListener("click", () => {
+  if (["error","done"].includes(state.status)) {
+    hideProgress();
+    setState({ status:"ready", error:null });
+  } else {
+    performDownload();
+  }
+});
+
+document.getElementById("resetBtn").addEventListener("click", () => {
+  urlInput.value = "";
+  hideProgress();
+  setState({ status:"idle", url:"", quality:"max", site:null, error:null });
+});
+
+// Fermer modal en cliquant dehors
+document.querySelectorAll(".modal-overlay").forEach(overlay => {
+  overlay.addEventListener("click", e => { if (e.target === overlay) overlay.classList.remove("open"); });
+});
+
+// Enter dans les inputs login/register
+document.getElementById("loginPass").addEventListener("keydown", e => { if (e.key==="Enter") doLogin(); });
+document.getElementById("regPass").addEventListener("keydown",   e => { if (e.key==="Enter") doRegister(); });
+
+// ── Init ──────────────────────────────────────────────
+renderTopbar();
+if (authToken) loadHistory();
+render();
+</script>
+</body>
+</html>
